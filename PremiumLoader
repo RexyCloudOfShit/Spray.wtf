@@ -1,0 +1,30 @@
+if not isfunctionhooked then
+    game.Players.LocalPlayer:Kick("EXECUTOR NOT SUPPORTED DM REXY IF YOU BELIVE THIS IS AN ERROR")
+    return
+end
+if game.GameId == 4777055365 or game.GameId == 122308715301969 then
+loadstring(game:HttpGet("https://raw.githubusercontent.com/RexyCloudOfShit/internality/refs/heads/main/Rost"))()
+elseif game.GameId == 14202073004 then
+print("Unnames Shooter")
+game.Players.LocalPlayer:Kick("Comming Soon")
+elseif game.GameId == 1862905328 then
+print("Survival Odyssey")
+game.Players.LocalPlayer:Kick("Comming Soon")
+elseif game.GameId == 11156779721 then
+print("The Survival Game")
+game.Players.LocalPlayer:Kick("Comming Soon")
+elseif game.GameId == 104715542330896 then
+print("BlockSpin")
+game.Players.LocalPlayer:Kick("Comming Soon")
+elseif game.GameId == 13559584718 then
+print("Lone Survival")
+game.Players.LocalPlayer:Kick("Comming Soon")
+elseif game.GameId == 13559584718 then
+print("Lone Survival")
+game.Players.LocalPlayer:Kick("Comming Soon")
+
+
+else
+print(game.GameId)
+game.Players.LocalPlayer:Kick("GAME NOT SUPPORTED DM REXY IF YOU BELIVE THIS IS AN ERROR")
+end
