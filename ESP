@@ -1,0 +1,243 @@
+--// ESP LIBRARY (with R6 skeleton support & arrows)
+local ESP = {}
+ESP.Settings = {
+    Enabled      = false,
+    Box          = {Enabled=false, Color=Color3.new(1,1,1)},
+    BoxFilled    = {Enabled=false, Color=Color3.new(1,1,1), Color2=Color3.new(1,1,1), Rotate=false, RotateSpeed=31},
+    HealthBar    = {Enabled=false, ColorTop=Color3.new(0,1,0), ColorBottom=Color3.new(1,0,0)},
+    Weapon       = {Enabled=false, Color=Color3.new(1,1,1)},
+    Skeleton     = {Enabled=false, Color=Color3.new(1,1,1), Thickness=1},
+    Chams        = {Enabled=false, Color=Color3.new(1,1,1), VisCheck=false},
+    Highlight    = {Enabled=false, Color=Color3.new(1,1,0), Target=""}, 
+    Arrows       = {Enabled=false, Color=Color3.new(1,1,1), Radius=100},
+    Distance     = {Enabled=false, Color=Color3.new(1,1,1), Format="s"},
+    Name         = {Enabled=false, Color=Color3.new(1,1,1)},
+}
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = workspace
+local Camera = Workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local function newDraw(class, props)
+    local d = Drawing.new(class)
+    for k,v in pairs(props) do d[k] = v end
+    return d
+end
+local function lerpColor(a,b,t)
+    return Color3.new(a.R+(b.R-a.R)*t, a.G+(b.G-a.G)*t, a.B+(b.B-a.B)*t)
+end
+local function rotate(v,deg)
+    local r = math.rad(deg)
+    return Vector2.new(v.X*math.cos(r)-v.Y*math.sin(r), v.X*math.sin(r)+v.Y*math.cos(r))
+end
+
+local ESPStore = {}
+
+local function createForPlayer(player)
+    if ESPStore[player] then return end
+    local store = {
+        Box       = newDraw("Square", {Thickness=1, Color=Color3.white, Filled=false, Visible=false}),
+        BoxFill   = newDraw("Square", {Thickness=0, Filled=true, Visible=false}),
+        HealthBar = newDraw("Line", {Thickness=2, Visible=false}),
+        HealthTxt = newDraw("Text", {Size=13, Color=Color3.white, Center=true, Outline=true, Visible=false}),
+        NameTxt   = newDraw("Text", {Size=14, Color=Color3.white, Center=true, Outline=true, Visible=false}),
+        WeaponTxt = newDraw("Text", {Size=13, Color=Color3.white, Center=true, Outline=true, Visible=false}),
+        Arrow     = newDraw("Triangle", {Filled=true, Color=Color3.white, Visible=false}),
+        Skeleton  = {},
+    }
+    for i=1,15 do
+        table.insert(store.Skeleton, newDraw("Line", {
+            Thickness=ESP.Settings.Skeleton.Thickness,
+            Color=ESP.Settings.Skeleton.Color,
+            Visible=false
+        }))
+    end
+    ESPStore[player] = store
+end
+
+local function removeForPlayer(player)
+    local st = ESPStore[player]
+    if not st then return end
+    for _,v in pairs(st) do
+        if type(v)=="table" then
+            for _,d in ipairs(v) do d:Remove() end
+        else
+            v:Remove()
+        end
+    end
+    ESPStore[player] = nil
+end
+
+Players.PlayerRemoving:Connect(removeForPlayer)
+
+RunService.RenderStepped:Connect(function()
+    if not ESP.Settings.Enabled then
+        for _,st in pairs(ESPStore) do
+            for _,v in pairs(st) do
+                if type(v)=="table" then
+                    for _,d in ipairs(v) do d.Visible = false end
+                else
+                    v.Visible = false
+                end
+            end
+        end
+        return
+    end
+
+    local camCFrame = Camera.CFrame
+    local camPos = camCFrame.Position
+    local screenSize = Camera.ViewportSize
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        local head= char and char:FindFirstChild("Head")
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if not (hrp and head and hum and hum.Health>0) then
+            removeForPlayer(player)
+            continue
+        end
+
+        createForPlayer(player)
+        local st = ESPStore[player]
+
+        local topP3, onTop = Camera:WorldToViewportPoint(head.Position + Vector3.new(0,0.5,0))
+        local botP3, onBot = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0,2,0))
+
+        if ESP.Settings.Arrows.Enabled and not (onTop and onBot) then
+            local dir = (hrp.Position - camPos).Unit
+            local right = camCFrame.RightVector
+            local up = camCFrame.UpVector
+            local screenCenter = screenSize / 2
+            local dir2 = Vector2.new(dir:Dot(right), -dir:Dot(up)).Unit
+            local arrowPoint = screenCenter + dir2 * ESP.Settings.Arrows.Radius
+            local base = rotate(Vector2.new(0, -20), 0)
+            local left = rotate(base, -30)
+            local rightV= rotate(base, 30)
+            st.Arrow.PointA = arrowPoint
+            st.Arrow.PointB = arrowPoint + left
+            st.Arrow.PointC = arrowPoint + rightV
+            st.Arrow.Color = ESP.Settings.Arrows.Color
+            st.Arrow.Visible = true
+        else
+            st.Arrow.Visible = false
+        end
+        if not (onTop and onBot) then continue end
+
+        local height = math.abs(topP3.Y - botP3.Y)
+        local width = height/2
+        local x,y = botP3.X - width/2, topP3.Y
+        local cx = botP3.X
+
+        if ESP.Settings.Box.Enabled then
+            st.Box.Visible = true
+            st.Box.Position = Vector2.new(x,y)
+            st.Box.Size = Vector2.new(width,height)
+            st.Box.Color = ESP.Settings.Box.Color
+        else st.Box.Visible = false end
+
+        if ESP.Settings.BoxFilled.Enabled then
+            st.BoxFill.Visible = true
+            st.BoxFill.Position = Vector2.new(x,y)
+            st.BoxFill.Size = Vector2.new(width,height)
+            if ESP.Settings.BoxFilled.Rotate then
+                local t = (math.sin(tick() * ESP.Settings.BoxFilled.RotateSpeed) + 1)/2
+                st.BoxFill.Color = lerpColor(ESP.Settings.BoxFilled.Color, ESP.Settings.BoxFilled.Color2, t)
+            else
+                st.BoxFill.Color = ESP.Settings.BoxFilled.Color
+            end
+        else st.BoxFill.Visible = false end
+
+        if ESP.Settings.HealthBar.Enabled then
+            local p = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
+            local bottomY = y + height
+            local topY = bottomY - height * p
+            local col = lerpColor(ESP.Settings.HealthBar.ColorBottom, ESP.Settings.HealthBar.ColorTop, p)
+            st.HealthBar.From = Vector2.new(x-4, bottomY)
+            st.HealthBar.To = Vector2.new(x-4, topY)
+            st.HealthBar.Color = col
+            st.HealthBar.Visible = true
+
+            st.HealthTxt.Text = math.floor(hum.Health).."hp"
+            st.HealthTxt.Position = Vector2.new(x-20, topY)
+            st.HealthTxt.Color = col
+            st.HealthTxt.Visible = true
+        else
+            st.HealthBar.Visible = false
+            st.HealthTxt.Visible = false
+        end
+
+        if ESP.Settings.Weapon.Enabled then
+            local tool = char:FindFirstChildOfClass("Tool")
+            st.WeaponTxt.Visible = true
+            st.WeaponTxt.Text = tool and tool.Name or ""
+            st.WeaponTxt.Position = Vector2.new(cx, y + height + 14)
+            st.WeaponTxt.Color = ESP.Settings.Weapon.Color
+        else st.WeaponTxt.Visible = false end
+
+        if ESP.Settings.Name.Enabled then
+            st.NameTxt.Visible = true
+            st.NameTxt.Text = player.DisplayName
+            st.NameTxt.Position = Vector2.new(cx, y - 18)
+            st.NameTxt.Color = ESP.Settings.Name.Color
+        else st.NameTxt.Visible = false end
+
+        if ESP.Settings.Distance.Enabled then
+            local d = (hrp.Position - camPos).Magnitude
+            local val = ESP.Settings.Distance.Format=="m" and d / 3.57 or d
+            local suf = ESP.Settings.Distance.Format=="m" and "m" or "s"
+            st.DistanceTxt = st.DistanceTxt or newDraw("Text",{Size=13,Color=ESP.Settings.Distance.Color,Center=true,Outline=true})
+            st.DistanceTxt.Text = string.format("%.0f%s", val, suf)
+            st.DistanceTxt.Position = Vector2.new(cx, y + height + 28)
+            st.DistanceTxt.Color = ESP.Settings.Distance.Color
+            st.DistanceTxt.Visible = true
+        end
+
+        if ESP.Settings.Skeleton.Enabled then
+            local function get(p) 
+                local part = char:FindFirstChild(p)
+                if part then
+                    local p2, vis = Camera:WorldToViewportPoint(part.Position)
+                    return vis and Vector2.new(p2.X,p2.Y) or nil
+                end
+            end
+            local isR6 = char:FindFirstChild("Torso")
+            local bones = {}
+            if isR6 then
+                bones = {
+                    get("Head"), get("Torso"), 
+                    get("Left Arm"), get("Left Leg"), 
+                    get("Right Arm"), get("Right Leg")
+                }
+            else
+                bones = {
+                    get("Head"), get("UpperTorso") or get("Torso"),
+                    get("HumanoidRootPart"),
+                    get("LeftUpperArm"), get("LeftLowerArm"), get("LeftHand"),
+                    get("RightUpperArm"), get("RightLowerArm"), get("RightHand"),
+                    get("LeftUpperLeg"), get("LeftLowerLeg"), get("LeftFoot"),
+                    get("RightUpperLeg"), get("RightLowerLeg"), get("RightFoot")
+                }
+            end
+            for i,line in ipairs(st.Skeleton) do
+                local a = bones[i]
+                local b = bones[i + (isR6 and 1 or 1)]
+                if a and b then
+                    line.From = a; line.To = b
+                    line.Color = ESP.Settings.Skeleton.Color
+                    line.Thickness = ESP.Settings.Skeleton.Thickness
+                    line.Visible = true
+                else
+                    line.Visible = false
+                end
+            end
+        else
+            for _, line in ipairs(st.Skeleton) do line.Visible = false end
+        end
+    end
+end)
+
+return ESP
