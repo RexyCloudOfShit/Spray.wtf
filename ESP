@@ -346,31 +346,56 @@ end
         end
     end
 
-    local function DrawArrows(esp, screenPos, direction)
-        if not ESP.Settings.Arrows.Enabled then
-            for _, arrow in pairs(esp.Arrows) do
-                arrow.Visible = false
+   local function DrawArrows()
+    if not ESP.Settings.Arrows.Enabled then return end
+
+    local screenCenter = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+    local radius = ESP.Settings.Arrows.Radius or 100
+    local arrowSize = 10
+    local arrowColor = ESP.Settings.Arrows.Color or Color3.new(1, 1, 1)
+
+    for player, esp in pairs(ESPTable) do
+        local character = player.Character
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+
+        if humanoid and humanoid.Health > 0 and hrp then
+            local pos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
+            if not onScreen then
+                local direction = (Vector2.new(pos.X, pos.Y) - screenCenter).Unit
+                local arrowPos = screenCenter + direction * radius
+
+                -- Calculate arrow points for a triangle pointing towards the player
+                local perp = Vector2.new(-direction.Y, direction.X) * (arrowSize / 2)
+                local tip = arrowPos + direction * arrowSize
+                local left = arrowPos - perp
+                local right = arrowPos + perp
+
+                if not esp.Arrow then
+                    esp.Arrow = Drawing.new("Triangle")
+                    esp.Arrow.Color = arrowColor
+                    esp.Arrow.Filled = true
+                    esp.Arrow.Visible = true
+                end
+
+                esp.Arrow.PointA = tip
+                esp.Arrow.PointB = left
+                esp.Arrow.PointC = right
+                esp.Arrow.Color = arrowColor
+                esp.Arrow.Visible = true
+            else
+                if esp.Arrow then
+                    esp.Arrow.Visible = false
+                end
             end
-            return
+        else
+            if esp.Arrow then
+                esp.Arrow.Visible = false
+            end
         end
-
-        local center = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
-        local radius = ESP.Settings.Arrows.Radius
-
-        local arrowPos = center + direction.Unit * radius
-        local size = 20
-
-        for _, arrow in pairs(esp.Arrows) do
-            arrow.Visible = false
-        end
-
-        local arrow1 = esp.Arrows[1]
-        arrow1.PointA = arrowPos + Vector2.new(0, -size / 2)
-        arrow1.PointB = arrowPos + Vector2.new(size / 2, size / 2)
-        arrow1.PointC = arrowPos + Vector2.new(-size / 2, size / 2)
-        arrow1.Color = ESP.Settings.Arrows.Color
-        arrow1.Visible = true
     end
+end
+
 
     local function OnRenderStep()
         if not ESP.Settings.Enabled then
