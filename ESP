@@ -1,83 +1,323 @@
---// ESP LIBRARY (with R6 skeleton support & arrows)
+-- ESP Library
 local ESP = {}
 ESP.Settings = {
-    Enabled      = false,
-    Box          = {Enabled=false, Color=Color3.new(1,1,1)},
-    BoxFilled    = {Enabled=false, Color=Color3.new(1,1,1), Color2=Color3.new(1,1,1), Rotate=false, RotateSpeed=31},
-    HealthBar    = {Enabled=false, ColorTop=Color3.new(0,1,0), ColorBottom=Color3.new(1,0,0)},
-    Weapon       = {Enabled=false, Color=Color3.new(1,1,1)},
-    Skeleton     = {Enabled=false, Color=Color3.new(1,1,1), Thickness=1},
-    Chams        = {Enabled=false, Color=Color3.new(1,1,1), VisCheck=false},
-    Highlight    = {Enabled=false, Color=Color3.new(1,1,0), Target=""}, 
-    Arrows       = {Enabled=false, Color=Color3.new(1,1,1), Radius=100},
-    Distance     = {Enabled=false, Color=Color3.new(1,1,1), Format="s"},
-    Name         = {Enabled=false, Color=Color3.new(1,1,1)},
+    Enabled = false,
+
+    Box = {
+        Enabled = false,
+        Color = Color3.new(1,1,1),
+        Filled = false,
+        FilledColor = Color3.new(1,1,1),
+        FilledColor2 = Color3.new(1,1,1),
+        Rotate = false,
+        RotateSpeed = 31,
+    },
+
+    HealthBar = {
+        Enabled = false,
+        Width = 4,
+    },
+
+    HealthText = {
+        Enabled = false,
+        Color = Color3.new(1,1,1),
+        FontSize = 13,
+    },
+
+    Skeleton = {
+        Enabled = false,
+        Color = Color3.new(1,1,1),
+        Thickness = 1,
+    },
+
+    Weapon = {
+        Enabled = false,
+        Color = Color3.new(1,1,1),
+        FontSize = 13,
+    },
+
+    Chams = {
+        Enabled = false,
+        Color = Color3.new(1,1,1),
+        VisCheck = false,
+        Transparency = 0.4,
+    },
+
+    Highlight = {
+        Enabled = false,
+        Color = Color3.new(1,1,0),
+        TargetName = nil,
+    },
+
+    Distance = {
+        Enabled = false,
+        Color = Color3.new(1,1,1),
+        Format = "s", -- studs or meters
+    },
+
+    Arrows = {
+        Enabled = false,
+        Color = Color3.new(1,1,1),
+        Radius = 100,
+        Thickness = 3,
+        Size = 15,
+    },
+
+    UpdateRate = 1/30, -- 30 FPS update rate for performance
 }
 
+--// Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local Workspace = workspace
-local Camera = Workspace.CurrentCamera
+local Camera = workspace.CurrentCamera
 local LocalPlayer = Players.LocalPlayer
+local UserInputService = game:GetService("UserInputService")
 
-local function newDraw(class, props)
-    local d = Drawing.new(class)
-    for k,v in pairs(props) do d[k] = v end
-    return d
-end
-local function lerpColor(a,b,t)
-    return Color3.new(a.R+(b.R-a.R)*t, a.G+(b.G-a.G)*t, a.B+(b.B-a.B)*t)
-end
-local function rotate(v,deg)
-    local r = math.rad(deg)
-    return Vector2.new(v.X*math.cos(r)-v.Y*math.sin(r), v.X*math.sin(r)+v.Y*math.cos(r))
+--// Drawing Cache
+local ESPTable = {}
+
+-- Helper to create Text Drawing
+local function NewText(size, color)
+    local text = Drawing.new("Text")
+    text.Size = size
+    text.Color = color
+    text.Center = true
+    text.Outline = true
+    text.OutlineColor = Color3.new(0,0,0)
+    text.Visible = false
+    text.Font = 2 -- System font
+    return text
 end
 
-local ESPStore = {}
+-- Helper to create Line Drawing
+local function NewLine(thickness, color)
+    local line = Drawing.new("Line")
+    line.Thickness = thickness or 1
+    line.Color = color or Color3.new(1,1,1)
+    line.Visible = false
+    return line
+end
 
-local function createForPlayer(player)
-    if ESPStore[player] then return end
-    local store = {
-        Box       = newDraw("Square", {Thickness=1, Color=Color3.white, Filled=false, Visible=false}),
-        BoxFill   = newDraw("Square", {Thickness=0, Filled=true, Visible=false}),
-        HealthBar = newDraw("Line", {Thickness=2, Visible=false}),
-        HealthTxt = newDraw("Text", {Size=13, Color=Color3.white, Center=true, Outline=true, Visible=false}),
-        NameTxt   = newDraw("Text", {Size=14, Color=Color3.white, Center=true, Outline=true, Visible=false}),
-        WeaponTxt = newDraw("Text", {Size=13, Color=Color3.white, Center=true, Outline=true, Visible=false}),
-        Arrow     = newDraw("Triangle", {Filled=true, Color=Color3.white, Visible=false}),
-        Skeleton  = {},
-    }
-    for i=1,15 do
-        table.insert(store.Skeleton, newDraw("Line", {
-            Thickness=ESP.Settings.Skeleton.Thickness,
-            Color=ESP.Settings.Skeleton.Color,
-            Visible=false
-        }))
+-- Helper to create Square Drawing (for box)
+local function NewSquare(thickness, color)
+    local square = Drawing.new("Square")
+    square.Thickness = thickness or 1
+    square.Color = color or Color3.new(1,1,1)
+    square.Filled = false
+    square.Visible = false
+    return square
+end
+
+-- Create ESP objects for a player
+local function CreateESP(player)
+    if player == LocalPlayer or ESPTable[player] then return end
+
+    local esp = {}
+
+    -- Box
+    esp.Box = NewSquare(1, ESP.Settings.Box.Color)
+    esp.BoxFilled = Drawing.new("Square")
+    esp.BoxFilled.Visible = false
+    esp.BoxFilled.Filled = true
+    esp.BoxFilled.Transparency = 0.3
+
+    -- Health Bar (vertical bar on left)
+    esp.HealthBarBack = NewLine(ESP.Settings.HealthBar.Width, Color3.new(0,0,0))
+    esp.HealthBarFill = NewLine(ESP.Settings.HealthBar.Width, Color3.new(0,1,0))
+
+    -- Health Text
+    esp.HealthText = NewText(ESP.Settings.HealthText.FontSize, ESP.Settings.HealthText.Color)
+
+    -- Name
+    esp.NameText = NewText(14, Color3.new(1,1,1))
+
+    -- Distance Text
+    esp.DistanceText = NewText(13, ESP.Settings.Distance.Color)
+
+    -- Weapon Text
+    esp.WeaponText = NewText(ESP.Settings.Weapon.FontSize, ESP.Settings.Weapon.Color)
+
+    -- Skeleton Lines
+    esp.Skeleton = {}
+    if ESP.Settings.Skeleton.Enabled then
+        for i=1, 20 do
+            esp.Skeleton[i] = NewLine(ESP.Settings.Skeleton.Thickness, ESP.Settings.Skeleton.Color)
+        end
     end
-    ESPStore[player] = store
+
+    -- Chams part outlines
+    esp.ChamsParts = {}
+
+    -- Arrow for offscreen
+    esp.Arrow = Drawing.new("Triangle")
+    esp.Arrow.Visible = false
+    esp.Arrow.Color = ESP.Settings.Arrows.Color
+    esp.Arrow.Filled = true
+    esp.Arrow.Transparency = 0.75
+
+    ESPTable[player] = esp
 end
 
-local function removeForPlayer(player)
-    local st = ESPStore[player]
-    if not st then return end
-    for _,v in pairs(st) do
-        if type(v)=="table" then
-            for _,d in ipairs(v) do d:Remove() end
-        else
+local function RemoveESP(player)
+    local esp = ESPTable[player]
+    if not esp then return end
+    for _, v in pairs(esp) do
+        if typeof(v) == "table" then
+            for _, d in pairs(v) do
+                if d and d.Remove then d:Remove() end
+            end
+        elseif v and v.Remove then
             v:Remove()
         end
     end
-    ESPStore[player] = nil
+    ESPTable[player] = nil
 end
 
-Players.PlayerRemoving:Connect(removeForPlayer)
+-- Cleanup on player leaving
+Players.PlayerRemoving:Connect(RemoveESP)
 
-RunService.RenderStepped:Connect(function()
+-- Get Skeleton Points for R15 and R6 rigs
+local function GetSkeletonPoints(character)
+    local points = {}
+
+    local function GetPos(partName)
+        local part = character:FindFirstChild(partName)
+        if part then
+            local pos, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if onScreen then
+                return Vector2.new(pos.X, pos.Y)
+            end
+        end
+        return nil
+    end
+
+    local rigType = character:FindFirstChildOfClass("Humanoid") and character.Humanoid.RigType or Enum.HumanoidRigType.R15
+
+    if rigType == Enum.HumanoidRigType.R15 then
+        points.Head = GetPos("Head")
+        points.Neck = GetPos("UpperTorso") or GetPos("Torso") or GetPos("HumanoidRootPart")
+        points.Root = GetPos("HumanoidRootPart")
+
+        points.LeftUpperArm = GetPos("LeftUpperArm")
+        points.LeftLowerArm = GetPos("LeftLowerArm")
+        points.LeftHand = GetPos("LeftHand")
+
+        points.RightUpperArm = GetPos("RightUpperArm")
+        points.RightLowerArm = GetPos("RightLowerArm")
+        points.RightHand = GetPos("RightHand")
+
+        points.LeftUpperLeg = GetPos("LeftUpperLeg")
+        points.LeftLowerLeg = GetPos("LeftLowerLeg")
+        points.LeftFoot = GetPos("LeftFoot")
+
+        points.RightUpperLeg = GetPos("RightUpperLeg")
+        points.RightLowerLeg = GetPos("RightLowerLeg")
+        points.RightFoot = GetPos("RightFoot")
+
+        points.Torso = GetPos("UpperTorso") or GetPos("Torso") or GetPos("HumanoidRootPart")
+    else -- R6
+        points.Head = GetPos("Head")
+        points.Neck = GetPos("Torso") or GetPos("HumanoidRootPart")
+        points.Root = GetPos("HumanoidRootPart")
+
+        points.LeftArm = GetPos("Left Arm")
+        points.RightArm = GetPos("Right Arm")
+        points.LeftLeg = GetPos("Left Leg")
+        points.RightLeg = GetPos("Right Leg")
+        points.Torso = GetPos("Torso") or GetPos("HumanoidRootPart")
+    end
+
+    return points, rigType
+end
+
+-- Draw skeleton lines according to rig
+local function DrawSkeleton(esp, points, rigType)
+    local lines = {}
+
+    if rigType == Enum.HumanoidRigType.R15 then
+        lines = {
+            {points.Head, points.Neck},
+            {points.Neck, points.LeftUpperArm},
+            {points.LeftUpperArm, points.LeftLowerArm},
+            {points.LeftLowerArm, points.LeftHand},
+            {points.Neck, points.RightUpperArm},
+            {points.RightUpperArm, points.RightLowerArm},
+            {points.RightLowerArm, points.RightHand},
+            {points.Neck, points.Torso},
+            {points.Torso, points.LeftUpperLeg},
+            {points.LeftUpperLeg, points.LeftLowerLeg},
+            {points.LeftLowerLeg, points.LeftFoot},
+            {points.Torso, points.RightUpperLeg},
+            {points.RightUpperLeg, points.RightLowerLeg},
+            {points.RightLowerLeg, points.RightFoot},
+        }
+    else -- R6
+        lines = {
+            {points.Head, points.Neck},
+            {points.Neck, points.LeftArm},
+            {points.Neck, points.RightArm},
+            {points.Neck, points.Torso},
+            {points.Torso, points.LeftLeg},
+            {points.Torso, points.RightLeg},
+        }
+    end
+
+    for i, line in ipairs(esp.Skeleton) do
+        local pair = lines[i]
+        if pair and pair[1] and pair[2] then
+            line.From = pair[1]
+            line.To = pair[2]
+            line.Color = ESP.Settings.Skeleton.Color
+            line.Thickness = ESP.Settings.Skeleton.Thickness
+            line.Visible = true
+        else
+            line.Visible = false
+        end
+    end
+end
+
+-- Offscreen arrow helper
+local function DrawOffscreenArrow(esp, screenPos, radius)
+    local centerX, centerY = workspace.CurrentCamera.ViewportSize.X/2, workspace.CurrentCamera.ViewportSize.Y/2
+    local dx, dy = screenPos.X - centerX, screenPos.Y - centerY
+    local angle = math.atan2(dy, dx)
+    local arrowDist = radius
+
+    local arrowX = centerX + math.cos(angle) * arrowDist
+    local arrowY = centerY + math.sin(angle) * arrowDist
+    local size = ESP.Settings.Arrows.Size
+
+    -- Calculate triangle points
+    local p1 = Vector2.new(arrowX + math.cos(angle) * size, arrowY + math.sin(angle) * size)
+    local p2 = Vector2.new(arrowX + math.cos(angle + 2.5) * size, arrowY + math.sin(angle + 2.5) * size)
+    local p3 = Vector2.new(arrowX + math.cos(angle - 2.5) * size, arrowY + math.sin(angle - 2.5) * size)
+
+    esp.Arrow.PointA = p1
+    esp.Arrow.PointB = p2
+    esp.Arrow.PointC = p3
+    esp.Arrow.Color = ESP.Settings.Arrows.Color
+    esp.Arrow.Transparency = 0.75
+    esp.Arrow.Visible = true
+end
+
+-- Gradient lerp helper
+local function LerpColor(a, b, t)
+    return Color3.new(
+        a.R + (b.R - a.R) * t,
+        a.G + (b.G - a.G) * t,
+        a.B + (b.B - a.B) * t
+    )
+end
+
+local lastUpdate = 0
+RunService.RenderStepped:Connect(function(delta)
     if not ESP.Settings.Enabled then
-        for _,st in pairs(ESPStore) do
-            for _,v in pairs(st) do
-                if type(v)=="table" then
-                    for _,d in ipairs(v) do d.Visible = false end
+        for _, esp in pairs(ESPTable) do
+            for _, v in pairs(esp) do
+                if typeof(v) == "table" then
+                    for _, d in pairs(v) do
+                        d.Visible = false
+                    end
                 else
                     v.Visible = false
                 end
@@ -86,158 +326,216 @@ RunService.RenderStepped:Connect(function()
         return
     end
 
-    local camCFrame = Camera.CFrame
-    local camPos = camCFrame.Position
+    lastUpdate += delta
+    if lastUpdate < ESP.Settings.UpdateRate then return end
+    lastUpdate = 0
+
+    local camPos = Camera.CFrame.Position
     local screenSize = Camera.ViewportSize
+    local center = Vector2.new(screenSize.X/2, screenSize.Y/2)
+    local radius = ESP.Settings.Arrows.Radius
 
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LocalPlayer then continue end
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
-        local head= char and char:FindFirstChild("Head")
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if not (hrp and head and hum and hum.Health>0) then
-            removeForPlayer(player)
+        local character = player.Character
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        local hrp = character and character:FindFirstChild("HumanoidRootPart")
+        local head = character and character:FindFirstChild("Head")
+        if not humanoid or humanoid.Health <= 0 or not hrp or not head then
+            RemoveESP(player)
             continue
         end
 
-        createForPlayer(player)
-        local st = ESPStore[player]
+        if not ESPTable[player] then CreateESP(player) end
+        local esp = ESPTable[player]
 
-        local topP3, onTop = Camera:WorldToViewportPoint(head.Position + Vector3.new(0,0.5,0))
-        local botP3, onBot = Camera:WorldToViewportPoint(hrp.Position - Vector3.new(0,2,0))
+        -- Calculate box positions
+        local topWorld = head.Position + Vector3.new(0, 0.5, 0)
+        local bottomWorld = hrp.Position - Vector3.new(0, 2.5, 0)
 
-        if ESP.Settings.Arrows.Enabled and not (onTop and onBot) then
-            local dir = (hrp.Position - camPos).Unit
-            local right = camCFrame.RightVector
-            local up = camCFrame.UpVector
-            local screenCenter = screenSize / 2
-            local dir2 = Vector2.new(dir:Dot(right), -dir:Dot(up)).Unit
-            local arrowPoint = screenCenter + dir2 * ESP.Settings.Arrows.Radius
-            local base = rotate(Vector2.new(0, -20), 0)
-            local left = rotate(base, -30)
-            local rightV= rotate(base, 30)
-            st.Arrow.PointA = arrowPoint
-            st.Arrow.PointB = arrowPoint + left
-            st.Arrow.PointC = arrowPoint + rightV
-            st.Arrow.Color = ESP.Settings.Arrows.Color
-            st.Arrow.Visible = true
-        else
-            st.Arrow.Visible = false
-        end
-        if not (onTop and onBot) then continue end
+        local topPos3, onScreenTop = Camera:WorldToViewportPoint(topWorld)
+        local bottomPos3, onScreenBottom = Camera:WorldToViewportPoint(bottomWorld)
 
-        local height = math.abs(topP3.Y - botP3.Y)
-        local width = height/2
-        local x,y = botP3.X - width/2, topP3.Y
-        local cx = botP3.X
+        local topPos = Vector2.new(topPos3.X, topPos3.Y)
+        local bottomPos = Vector2.new(bottomPos3.X, bottomPos3.Y)
 
+        local height = math.abs(bottomPos.Y - topPos.Y)
+        local width = height / 2
+        local boxX = bottomPos.X - width/2
+        local boxY = topPos.Y
+
+        -- Box Drawing
         if ESP.Settings.Box.Enabled then
-            st.Box.Visible = true
-            st.Box.Position = Vector2.new(x,y)
-            st.Box.Size = Vector2.new(width,height)
-            st.Box.Color = ESP.Settings.Box.Color
-        else st.Box.Visible = false end
+            esp.Box.Color = ESP.Settings.Box.Color
+            esp.Box.Thickness = 1
+            esp.Box.Position = Vector2.new(boxX, boxY)
+            esp.Box.Size = Vector2.new(width, height)
+            esp.Box.Visible = true
 
-        if ESP.Settings.BoxFilled.Enabled then
-            st.BoxFill.Visible = true
-            st.BoxFill.Position = Vector2.new(x,y)
-            st.BoxFill.Size = Vector2.new(width,height)
-            if ESP.Settings.BoxFilled.Rotate then
-                local t = (math.sin(tick() * ESP.Settings.BoxFilled.RotateSpeed) + 1)/2
-                st.BoxFill.Color = lerpColor(ESP.Settings.BoxFilled.Color, ESP.Settings.BoxFilled.Color2, t)
-            else
-                st.BoxFill.Color = ESP.Settings.BoxFilled.Color
-            end
-        else st.BoxFill.Visible = false end
+            if ESP.Settings.Box.Filled then
+                esp.BoxFilled.Position = esp.Box.Position
+                esp.BoxFilled.Size = esp.Box.Size
+                esp.BoxFilled.Visible = true
 
-        if ESP.Settings.HealthBar.Enabled then
-            local p = math.clamp(hum.Health / hum.MaxHealth, 0, 1)
-            local bottomY = y + height
-            local topY = bottomY - height * p
-            local col = lerpColor(ESP.Settings.HealthBar.ColorBottom, ESP.Settings.HealthBar.ColorTop, p)
-            st.HealthBar.From = Vector2.new(x-4, bottomY)
-            st.HealthBar.To = Vector2.new(x-4, topY)
-            st.HealthBar.Color = col
-            st.HealthBar.Visible = true
+                -- Gradient fill with rotation if enabled
+                local time = tick()
+                local t = 0.5 + 0.5 * math.sin(time * ESP.Settings.Box.RotateSpeed)
+                local col = LerpColor(ESP.Settings.Box.FilledColor, ESP.Settings.Box.FilledColor2, t)
+                esp.BoxFilled.Color = col
 
-            st.HealthTxt.Text = math.floor(hum.Health).."hp"
-            st.HealthTxt.Position = Vector2.new(x-20, topY)
-            st.HealthTxt.Color = col
-            st.HealthTxt.Visible = true
-        else
-            st.HealthBar.Visible = false
-            st.HealthTxt.Visible = false
-        end
-
-        if ESP.Settings.Weapon.Enabled then
-            local tool = char:FindFirstChildOfClass("Tool")
-            st.WeaponTxt.Visible = true
-            st.WeaponTxt.Text = tool and tool.Name or ""
-            st.WeaponTxt.Position = Vector2.new(cx, y + height + 14)
-            st.WeaponTxt.Color = ESP.Settings.Weapon.Color
-        else st.WeaponTxt.Visible = false end
-
-        if ESP.Settings.Name.Enabled then
-            st.NameTxt.Visible = true
-            st.NameTxt.Text = player.DisplayName
-            st.NameTxt.Position = Vector2.new(cx, y - 18)
-            st.NameTxt.Color = ESP.Settings.Name.Color
-        else st.NameTxt.Visible = false end
-
-        if ESP.Settings.Distance.Enabled then
-            local d = (hrp.Position - camPos).Magnitude
-            local val = ESP.Settings.Distance.Format=="m" and d / 3.57 or d
-            local suf = ESP.Settings.Distance.Format=="m" and "m" or "s"
-            st.DistanceTxt = st.DistanceTxt or newDraw("Text",{Size=13,Color=ESP.Settings.Distance.Color,Center=true,Outline=true})
-            st.DistanceTxt.Text = string.format("%.0f%s", val, suf)
-            st.DistanceTxt.Position = Vector2.new(cx, y + height + 28)
-            st.DistanceTxt.Color = ESP.Settings.Distance.Color
-            st.DistanceTxt.Visible = true
-        end
-
-        if ESP.Settings.Skeleton.Enabled then
-            local function get(p) 
-                local part = char:FindFirstChild(p)
-                if part then
-                    local p2, vis = Camera:WorldToViewportPoint(part.Position)
-                    return vis and Vector2.new(p2.X,p2.Y) or nil
-                end
-            end
-            local isR6 = char:FindFirstChild("Torso")
-            local bones = {}
-            if isR6 then
-                bones = {
-                    get("Head"), get("Torso"), 
-                    get("Left Arm"), get("Left Leg"), 
-                    get("Right Arm"), get("Right Leg")
-                }
-            else
-                bones = {
-                    get("Head"), get("UpperTorso") or get("Torso"),
-                    get("HumanoidRootPart"),
-                    get("LeftUpperArm"), get("LeftLowerArm"), get("LeftHand"),
-                    get("RightUpperArm"), get("RightLowerArm"), get("RightHand"),
-                    get("LeftUpperLeg"), get("LeftLowerLeg"), get("LeftFoot"),
-                    get("RightUpperLeg"), get("RightLowerLeg"), get("RightFoot")
-                }
-            end
-            for i,line in ipairs(st.Skeleton) do
-                local a = bones[i]
-                local b = bones[i + (isR6 and 1 or 1)]
-                if a and b then
-                    line.From = a; line.To = b
-                    line.Color = ESP.Settings.Skeleton.Color
-                    line.Thickness = ESP.Settings.Skeleton.Thickness
-                    line.Visible = true
+                if ESP.Settings.Box.Rotate then
+                    esp.BoxFilled.Rotation = (time * ESP.Settings.Box.RotateSpeed) % 360
                 else
-                    line.Visible = false
+                    esp.BoxFilled.Rotation = 0
+                end
+                esp.BoxFilled.Transparency = 0.3
+            else
+                esp.BoxFilled.Visible = false
+            end
+        else
+            esp.Box.Visible = false
+            esp.BoxFilled.Visible = false
+        end
+
+        -- Health Bar
+        if ESP.Settings.HealthBar.Enabled then
+            local hpPercent = math.clamp(humanoid.Health / humanoid.MaxHealth, 0, 1)
+            local barTop = boxY
+            local barBottom = boxY + height
+            local barHeight = (barBottom - barTop) * hpPercent
+
+            local barX = boxX - ESP.Settings.HealthBar.Width - 2
+            esp.HealthBarBack.From = Vector2.new(barX, barTop)
+            esp.HealthBarBack.To = Vector2.new(barX, barBottom)
+            esp.HealthBarBack.Color = Color3.new(0,0,0)
+            esp.HealthBarBack.Visible = true
+
+            esp.HealthBarFill.From = Vector2.new(barX, barBottom)
+            esp.HealthBarFill.To = Vector2.new(barX, barBottom - barHeight)
+
+            -- Gradient from green (top) to red (bottom)
+            local healthColor = LerpColor(Color3.new(1,0,0), Color3.new(0,1,0), hpPercent)
+            esp.HealthBarFill.Color = healthColor
+            esp.HealthBarFill.Visible = true
+
+            -- Health Text
+            if ESP.Settings.HealthText.Enabled then
+                esp.HealthText.Text = string.format("%d hp", math.floor(humanoid.Health))
+                esp.HealthText.Position = Vector2.new(barX - 15, barBottom - barHeight)
+                esp.HealthText.Color = healthColor
+                esp.HealthText.Visible = true
+            else
+                esp.HealthText.Visible = false
+            end
+        else
+            esp.HealthBarBack.Visible = false
+            esp.HealthBarFill.Visible = false
+            esp.HealthText.Visible = false
+        end
+
+        -- Name
+        esp.NameText.Text = player.DisplayName
+        esp.NameText.Position = Vector2.new(center.X, boxY - 18)
+        esp.NameText.Visible = ESP.Settings.Enabled and true
+
+        -- Distance
+        if ESP.Settings.Distance.Enabled then
+            local dist = (camPos - hrp.Position).Magnitude
+            local unit = ESP.Settings.Distance.Format == "m" and "m" or "s"
+            esp.DistanceText.Text = string.format("%.0f %s", dist, unit)
+            esp.DistanceText.Position = Vector2.new(center.X, boxY + height + 2)
+            esp.DistanceText.Visible = true
+        else
+            esp.DistanceText.Visible = false
+        end
+
+        -- Weapon
+        if ESP.Settings.Weapon.Enabled then
+            local tool = character:FindFirstChildOfClass("Tool")
+            esp.WeaponText.Text = tool and tool.Name or ""
+            esp.WeaponText.Position = Vector2.new(center.X, boxY + height + 16)
+            esp.WeaponText.Visible = true
+        else
+            esp.WeaponText.Visible = false
+        end
+
+        -- Skeleton
+        if ESP.Settings.Skeleton.Enabled then
+            local points, rigType = GetSkeletonPoints(character)
+            DrawSkeleton(esp, points, rigType)
+        else
+            for _, line in pairs(esp.Skeleton) do
+                line.Visible = false
+            end
+        end
+
+        -- Chams & Highlight logic
+        local highlightTarget = nil
+        if ESP.Settings.Highlight.Enabled and ESP.Settings.Highlight.TargetName then
+            highlightTarget = Players:FindFirstChild(ESP.Settings.Highlight.TargetName)
+        end
+
+        if ESP.Settings.Chams.Enabled then
+            if not esp.ChamsParts or #esp.ChamsParts == 0 then
+                -- Setup chams for parts
+                esp.ChamsParts = {}
+                for _, part in pairs(character:GetChildren()) do
+                    if part:IsA("BasePart") and part.Transparency < 1 then
+                        local adorn = Instance.new("BoxHandleAdornment")
+                        adorn.Adornee = part
+                        adorn.AlwaysOnTop = true
+                        adorn.ZIndex = 2
+                        adorn.Size = part.Size
+                        adorn.Color3 = ESP.Settings.Chams.Color
+                        adorn.Transparency = ESP.Settings.Chams.Transparency
+                        adorn.Parent = part
+                        table.insert(esp.ChamsParts, adorn)
+                    end
+                end
+            else
+                for _, adorn in pairs(esp.ChamsParts) do
+                    adorn.Color3 = ESP.Settings.Chams.Color
+                    adorn.Transparency = ESP.Settings.Chams.Transparency
                 end
             end
         else
-            for _, line in ipairs(st.Skeleton) do line.Visible = false end
+            -- Remove chams
+            if esp.ChamsParts then
+                for _, adorn in pairs(esp.ChamsParts) do
+                    adorn:Destroy()
+                end
+                esp.ChamsParts = {}
+            end
+        end
+
+        -- Highlight override
+        if highlightTarget == player then
+            -- Use highlight color
+            for _, adorn in pairs(esp.ChamsParts or {}) do
+                adorn.Color3 = ESP.Settings.Highlight.Color
+            end
+            esp.Box.Color = ESP.Settings.Highlight.Color
+        end
+
+        -- Arrows for off-screen players
+        local onScreen = onScreenTop or onScreenBottom
+        if ESP.Settings.Arrows.Enabled and not onScreen then
+            DrawOffscreenArrow(esp, bottomPos, radius)
+        else
+            esp.Arrow.Visible = false
         end
     end
 end)
+
+-- Public API
+function ESP:Toggle(state)
+    ESP.Settings.Enabled = state
+end
+
+function ESP:Destroy()
+    for player, esp in pairs(ESPTable) do
+        RemoveESP(player)
+    end
+end
 
 return ESP
