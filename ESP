@@ -185,50 +185,55 @@ return (function()
         return parts
     end
 
-    local function DrawSkeleton(esp, parts)
-        local function DrawLine(idx, fromPos, toPos)
-            if fromPos and toPos then
-                local fromScreen, onScreenFrom = Camera:WorldToViewportPoint(fromPos)
-                local toScreen, onScreenTo = Camera:WorldToViewportPoint(toPos)
-                if onScreenFrom and onScreenTo then
-                    esp.Skeleton[idx].From = Vector2.new(fromScreen.X, fromScreen.Y)
-                    esp.Skeleton[idx].To = Vector2.new(toScreen.X, toScreen.Y)
-                    esp.Skeleton[idx].Visible = true
-                    esp.Skeleton[idx].Color = ESP.Settings.Skeleton.Color
-                    return
-                end
+ local function DrawSkeleton(esp, parts)
+    local function DrawLine(idx, fromPos, toPos)
+        if fromPos and toPos then
+            local fromScreen, onScreenFrom = Camera:WorldToViewportPoint(fromPos)
+            local toScreen, onScreenTo = Camera:WorldToViewportPoint(toPos)
+            if onScreenFrom and onScreenTo then
+                esp.Skeleton[idx].From = Vector2.new(fromScreen.X, fromScreen.Y)
+                esp.Skeleton[idx].To = Vector2.new(toScreen.X, toScreen.Y)
+                esp.Skeleton[idx].Visible = true
+                esp.Skeleton[idx].Color = ESP.Settings.Skeleton.Color
+                esp.Skeleton[idx].Thickness = ESP.Settings.Skeleton.Thickness
+                return
             end
-            esp.Skeleton[idx].Visible = false
         end
-
-        if not parts.Head then return end
-
-        local rig = parts.Root and parts.Root.Parent
-        if rig and rig:FindFirstChild("Humanoid") and rig.Humanoid.RigType == Enum.HumanoidRigType.R6 then
-            DrawLine(1, parts.Head, parts.Torso)
-            DrawLine(2, parts.Torso, parts.LeftArm)
-            DrawLine(3, parts.Torso, parts.RightArm)
-            DrawLine(4, parts.Torso, parts.LeftLeg)
-            DrawLine(5, parts.Torso, parts.RightLeg)
-            for i=6,15 do esp.Skeleton[i].Visible = false end
-        else
-            DrawLine(1, parts.Head, parts.UpperTorso)
-            DrawLine(2, parts.UpperTorso, parts.LowerTorso)
-            DrawLine(3, parts.LowerTorso, parts.Root)
-            DrawLine(4, parts.UpperTorso, parts.LeftUpperArm)
-            DrawLine(5, parts.LeftUpperArm, parts.LeftLowerArm)
-            DrawLine(6, parts.LeftLowerArm, parts.LeftHand)
-            DrawLine(7, parts.UpperTorso, parts.RightUpperArm)
-            DrawLine(8, parts.RightUpperArm, parts.RightLowerArm)
-            DrawLine(9, parts.RightLowerArm, parts.RightHand)
-            DrawLine(10, parts.LowerTorso, parts.LeftUpperLeg)
-            DrawLine(11, parts.LeftUpperLeg, parts.LeftLowerLeg)
-            DrawLine(12, parts.LeftLowerLeg, parts.LeftFoot)
-            DrawLine(13, parts.LowerTorso, parts.RightUpperLeg)
-            DrawLine(14, parts.RightUpperLeg, parts.RightLowerLeg)
-            DrawLine(15, parts.RightLowerLeg, parts.RightFoot)
-        end
+        esp.Skeleton[idx].Visible = false
     end
+
+    if not parts.Head then return end
+
+    local character = parts.Root and parts.Root.Parent
+    if character and character:FindFirstChildOfClass("Humanoid") and character.Humanoid.RigType == Enum.HumanoidRigType.R6 then
+        DrawLine(1, parts.Head, parts.Torso)
+        DrawLine(2, parts.Torso, parts.LeftArm)
+        DrawLine(3, parts.Torso, parts.RightArm)
+        DrawLine(4, parts.Torso, parts.LeftLeg)
+        DrawLine(5, parts.Torso, parts.RightLeg)
+        -- Hide unused lines
+        for i = 6, 15 do
+            esp.Skeleton[i].Visible = false
+        end
+    else
+        DrawLine(1, parts.Head, parts.UpperTorso)
+        DrawLine(2, parts.UpperTorso, parts.LowerTorso)
+        DrawLine(3, parts.LowerTorso, parts.Root)
+        DrawLine(4, parts.UpperTorso, parts.LeftUpperArm)
+        DrawLine(5, parts.LeftUpperArm, parts.LeftLowerArm)
+        DrawLine(6, parts.LeftLowerArm, parts.LeftHand)
+        DrawLine(7, parts.UpperTorso, parts.RightUpperArm)
+        DrawLine(8, parts.RightUpperArm, parts.RightLowerArm)
+        DrawLine(9, parts.RightLowerArm, parts.RightHand)
+        DrawLine(10, parts.LowerTorso, parts.LeftUpperLeg)
+        DrawLine(11, parts.LeftUpperLeg, parts.LeftLowerLeg)
+        DrawLine(12, parts.LeftLowerLeg, parts.LeftFoot)
+        DrawLine(13, parts.LowerTorso, parts.RightUpperLeg)
+        DrawLine(14, parts.RightUpperLeg, parts.RightLowerLeg)
+        DrawLine(15, parts.RightLowerLeg, parts.RightFoot)
+    end
+end
+
 
     local function GetEquippedTool(character)
         for _, tool in pairs(character:GetChildren()) do
