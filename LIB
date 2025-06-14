@@ -1420,7 +1420,7 @@ local sound_service = cloneref(game:GetService("SoundService"))
         end  
 
         function library:toggle(options) 
-            local rand = 1
+            local rand = 1 
             local cfg = {
                 enabled = options.enabled or nil,
                 name = options.name or "Toggle",
@@ -1435,8 +1435,11 @@ local sound_service = cloneref(game:GetService("SoundService"))
 
                 items = {};
                 seperator = options.seperator or options.Seperator or false;
+                limit = options.limit or false;
             }
 
+            flags[cfg.flag] = cfg.default
+            
             local items = cfg.items; do
                 items[ "toggle" ] = library:create( "TextButton" , {
                     FontFace = fonts.small;
@@ -1547,7 +1550,7 @@ local sound_service = cloneref(game:GetService("SoundService"))
                             BorderSizePixel = 0;
                             BackgroundColor3 = rgb(22, 22, 24)
                         }); library:apply_theme(items[ "outline" ], "accent", "BackgroundColor3");
-
+                        
                         items[ "tick" ] = library:create( "ImageLabel" , {
                             ImageTransparency = 1;
                             BorderColor3 = rgb(0, 0, 0);
@@ -1633,6 +1636,10 @@ local sound_service = cloneref(game:GetService("SoundService"))
             end;
             
             function cfg.set(bool)
+                if cfg.limit then 
+                    return 
+                end 
+                
                 if cfg.type == "checkbox" then 
                     library:tween(items[ "tick" ], {Rotation = bool and 0 or 45, ImageTransparency = bool and 0 or 1})
                     library:tween(items[ "toggle_button" ], {BackgroundColor3 = bool and themes.preset.accent or rgb(67, 67, 68)})
@@ -1679,7 +1686,7 @@ local sound_service = cloneref(game:GetService("SoundService"))
             config_flags[cfg.flag] = cfg.set
 
             return setmetatable(cfg, library)
-        end 
+        end
         
         function library:slider(options) 
             local cfg = {
